@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Game Landscape Fullscreen</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0d1117;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #fff;
+    }
+
+    /* Container Utama Responsif Landscape */
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #161b22;
+    }
+
+    canvas {
+      background: #000;
+      box-shadow: 0 0 20px rgba(0,0,0,0.8);
+      display: block;
+    }
+
+    /* Overlay Layar UI */
+    .overlay-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(13, 17, 23, 0.92);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+      transition: opacity 0.3s ease;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Judul & Teks Menu */
+    h1 {
+      font-size: 2.8rem;
+      margin-bottom: 10px;
+      color: #58a6ff;
+      text-shadow: 0 0 10px rgba(88, 166, 255, 0.5);
+      text-align: center;
+    }
+
+    p.subtitle {
+      font-size: 1rem;
+      color: #8b949e;
+      margin-bottom: 25px;
+      text-align: center;
+    }
+
+    /* Tombol-tombol UI */
+    .btn-group {
+      display: flex;
+      gap: 15px;
+    }
+
+    .btn {
+      padding: 12px 28px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #fff;
+      background: #238636;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(35, 134, 54, 0.4);
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: #2ea043;
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      background: #21262d;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      border: 1px solid #30363d;
+    }
+
+    .btn-secondary:hover {
+      background: #30363d;
+    }
+
+    /* Peringatan Orientasi Potret */
+    #portrait-warning {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #0d1117;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      text-align: center;
+      padding: 20px;
+    }
+
+    #portrait-warning p {
+      font-size: 1.2rem;
+      color: #f85149;
+      margin-top: 10px;
+    }
+
+    /* HUD saat Game Berjalan */
+    #game-hud {
+      position: absolute;
+      top: 15px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .hud-element {
+      font-size: 1.2rem;
+      font-weight: bold;
+      background: rgba(22, 27, 34, 0.7);
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid rgba(48, 54, 61, 0.8);
+      pointer-events: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD saat Dalam Game -->
+    <div id="game-hud" class="hidden">
+      <div class="hud-element" id="scoreDisplay">Skor: 0</div>
+      <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.9rem;" onclick="pauseGame()">Pause</button>
+    </div>
+
+    <!-- Menu Awal -->
+    <div id="main-menu" class="overlay-screen">
+      <h1>NAMA GAME KAMU</h1>
+      <p class="subtitle">Gunakan Mode Landscape untuk Pengalaman Terbaik</p>
+      <div class="btn-group">
+        <button class="btn" onclick="startGame()">Mulai Game</button>
+        <button class="btn btn-secondary" onclick="toggleFullscreen()">Full Screen</button>
+      </div>
+    </div>
+
+    <!-- Menu Pause -->
+    <div id="pause-menu" class="overlay-screen hidden">
+      <h1>Game Dipause</h1>
+      <div class="btn-group" style="margin-top: 20px;">
+        <button class="btn" onclick="resumeGame()">Lanjut</button>
+        <button class="btn btn-secondary" onclick="showMainMenu()">Menu Utama</button>
+      </div>
+    </div>
+
+    <!-- Peringatan Orientasi Layar -->
+    <div id="portrait-warning">
+      <h1>🔄</h1>
+      <p>Minta tolong putar HP kamu ke posisi <b>Landscape</b> untuk bermain!</p>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const mainMenu = document.getElementById('main-menu');
+    const pauseMenu = document.getElementById('pause-menu');
+    const gameHud = document.getElementById('game-hud');
+    const portraitWarning = document.getElementById('portrait-warning');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+
+    let gameLoopId;
+    let isPlaying = false;
+    let score = 0;
+
+    // Objek karakter contoh
+    let player = {
+      x: 100,
+      y: 100,
+      size: 30,
+      speed: 4,
+      dx: 0,
+      dy: 0
+    };
+
+    // Atur Ukuran Canvas Mengikuti Layar (Aspek Rasio Landscape 16:9)
+    function resizeCanvas() {
+      const windowWidth = window.innerWidth;
+      const windowHeight = window.innerHeight;
+
+      // Cek orientasi layar HP
+      if (windowHeight > windowWidth) {
+        portraitWarning.style.display = 'flex';
+      } else {
+        portraitWarning.style.display = 'none';
+      }
+
+      // Pertahankan aspek rasio 16:9 di dalam layar landscape
+      let targetWidth = windowWidth;
+      let targetHeight = windowWidth * (9 / 16);
+
+      if (targetHeight > windowHeight) {
+        targetHeight = windowHeight;
+        targetWidth = windowHeight * (16 / 9);
+      }
+
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      // Reset posisi karakter saat canvas di-resize agar tetap di dalam batas
+      if (!isPlaying) {
+        player.x = canvas.width / 2;
+        player.y = canvas.height / 2;
+      }
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Kontrol Fullscreen
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          alert(`Gagal aktifkan Fullscreen: ${err.message}`);
+        });
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    // Navigasi Menu
+    function startGame() {
+      mainMenu.classList.add('hidden');
+      pauseMenu.classList.add('hidden');
+      gameHud.classList.remove('hidden');
+      
+      score = 0;
+      player.x = canvas.width / 2;
+      player.y = canvas.height / 2;
+      isPlaying = true;
+      
+      gameLoop();
+    }
+
+    function pauseGame() {
+      isPlaying = false;
+      cancelAnimationFrame(gameLoopId);
+      pauseMenu.classList.remove('hidden');
+    }
+
+    function resumeGame() {
+      pauseMenu.classList.add('hidden');
+      isPlaying = true;
+      gameLoop();
+    }
+
+    function showMainMenu() {
+      isPlaying = false;
+      cancelAnimationFrame(gameLoopId);
+      pauseMenu.classList.add('hidden');
+      gameHud.classList.add('hidden');
+      mainMenu.classList.remove('hidden');
+    }
+
+    // Logika dan Update Game
+    function update() {
+      player.x += player.dx;
+      player.y += player.dy;
+
+      // Batas area canvas
+      if (player.x < 0) player.x = 0;
+      if (player.x + player.size > canvas.width) player.x = canvas.width - player.size;
+      if (player.y < 0) player.y = 0;
+      if (player.y + player.size > canvas.height) player.y = canvas.height - player.size;
+
+      score += 1;
+      scoreDisplay.innerText = `Skor: ${Math.floor(score / 10)}`;
+    }
+
+    // Render Visual
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Gambar Lapangan/Background
+      ctx.fillStyle = '#0d1117';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Gambar Karakter
+      ctx.fillStyle = '#58a6ff';
+      ctx.fillRect(player.x, player.y, player.size, player.size);
+    }
+
+    function gameLoop() {
+      if (!isPlaying) return;
+      update();
+      draw();
+      gameLoopId = requestAnimationFrame(gameLoop);
+    }
+
+    // Kontrol Keyboard
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'd') player.dx = player.speed;
+      if (e.key === 'ArrowLeft' || e.key === 'a') player.dx = -player.speed;
+      if (e.key === 'ArrowUp' || e.key === 'w') player.dy = -player.speed;
+      if (e.key === 'ArrowDown' || e.key === 's') player.dy = player.speed;
+      if (e.key === 'Escape' && isPlaying) pauseGame();
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (['ArrowRight', 'ArrowLeft', 'd', 'a'].includes(e.key)) player.dx = 0;
+      if (['ArrowUp', 'ArrowDown', 'w', 's'].includes(e.key)) player.dy = 0;
+    });
+  </script>
+</body>
+</html>
